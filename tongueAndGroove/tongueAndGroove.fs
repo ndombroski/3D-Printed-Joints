@@ -1,8 +1,8 @@
 FeatureScript 2837;
 import(path : "onshape/std/common.fs", version : "2837.0");
 
-annotation { "Feature Type Name": "Square Peg and Hole" }
-export const pegAndHole = defineFeature(function(context is Context, id is Id, definition is map)
+annotation { "Feature Type Name": "Tongue and Groove" }
+export const tongueAndGroove = defineFeature(function(context is Context, id is Id, definition is map)
     precondition
     {
         annotation { "Name" : "Path line", "Filter" : EntityType.EDGE, "MaxNumberOfPicks" : 1, "Description" : "Line that the tongue will follow" }
