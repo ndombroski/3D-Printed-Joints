@@ -105,6 +105,11 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
             "thickness1" : tongueThickness / 2,
             "thickness2" : tongueThickness / 2
     });
+    
+    // Cleanup the sheet body
+    opDeleteBodies(context, id + "deleteSheet", {
+            "entities" : sheetBody
+    });
 
     // Return the thickened body
     return qCreatedBy(thickenId, EntityType.BODY);
