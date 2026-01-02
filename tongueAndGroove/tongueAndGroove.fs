@@ -5,8 +5,8 @@ annotation { "Feature Type Name": "Tongue and Groove" }
 export const tongueAndGroove = defineFeature(function(context is Context, id is Id, definition is map)
     precondition
     {
-        annotation { "Name" : "Path line", "Filter" : EntityType.EDGE, "MaxNumberOfPicks" : 1, "Description" : "Line that the tongue will follow" }
-        definition.pathLine is Query;
+        annotation { "Name" : "Path lines", "Filter" : EntityType.EDGE, "Description" : "Lines that the tongues will follow" }
+        definition.pathLines is Query;
   
         annotation { "Name" : "Tongue thickness", "Description" : "Thickness of the tongue to be created" }
         isLength(definition.tongueThickness, { (millimeter) : [-1e5, 3, 1e5] } as LengthBoundSpec);
@@ -23,11 +23,11 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         annotation { "Name" : "Face", "Filter" : EntityType.FACE, "MaxNumberOfPicks" : 1, "Description" : "Face to create the tongue normal to. The tongue will protrude outward from the body of the selected face" }
         definition.face is Query;
         
-        annotation { "Name" : "Tongue part", "Filter" : EntityType.BODY, "MaxNumberOfPicks" : 1, "Description" : "Part that will have a tongue added to it" }
-        definition.tonguePart is Query;
+        annotation { "Name" : "Tongue parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have tongues added to them" }
+        definition.tongueParts is Query;
         
-        annotation { "Name" : "Groove parts", "Filter" : EntityType.BODY, "MaxNumberOfPicks" : 1, "Description" : "Part that will have groove subtracted from it" }
-        definition.groovePart is Query;
+        annotation { "Name" : "Groove parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have grooves subtracted from them" }
+        definition.grooveParts is Query;
         
     }
     {        
@@ -45,28 +45,50 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
             throw regenError("Length clearance is too large. It must be less than the tongue length.");
         }
         
-        // Create tongue body with clearance for adding to tonguePart
-        var tongueBody = createTongueBody(context, id + "tongue", definition.pathLine, definition.face, tongueThicknessWithClearance, tongueLengthWithClearance);
+        // Create arrays to store tongue bodies for boolean operations later
+        var tongueTools = []; // For adding to tongueParts (including clearance)
+        var grooveTools = []; // For cutting grooves
+
+        // Create tongue bodies for each selected line
+        var lines = evaluateQuery(context, definition.pathLines);
+        for (var i = 0; i < size(lines); i += 1)
+        {
+            // Create tongue with clearance for adding to tongueParts
+            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance);
+            tongueTools = append(tongueTools, tongueBody);
+            
+            // Create full-size tongue for cutting grooves
+            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength);
+            grooveTools = append(grooveTools, grooveTool);
+        }
         
-        // Create full-size tongue for cutting groove
-        var grooveTool = createTongueBody(context, id + "groove", definition.pathLine, definition.face, definition.tongueThickness, definition.tongueLength);
+        // Perform boolean operations to cut the grooves and add the tongues respectively
         
-        // Subtract groove from groovePart
-        if (!isQueryEmpty(context, grooveTool)) {            
+        // Create queries that encompass all tongue bodies
+        var allTongueTools = qUnion(tongueTools);
+        var allGrooveTools = qUnion(grooveTools);
+        
+        // Subtract bodies from grooveParts
+        if (!isQueryEmpty(context, allGrooveTools)) {            
             opBoolean(context, id + "booleanCut", {
-                    "tools" : grooveTool,
-                    "targets" : definition.groovePart,
+                    "tools" : allGrooveTools,
+                    "targets" : definition.grooveParts,
                     "operationType" : BooleanOperationType.SUBTRACTION,
                     "keepTools" : false 
             });
         }
         
-        // Join tongue with tonguePart
-        if (!isQueryEmpty(context, tongueBody)) {
-            opBoolean(context, id + "booleanAdd", {
-                "tools" : qUnion([definition.tonguePart, tongueBody]),
-                "operationType" : BooleanOperationType.UNION
-            });
+        // Join bodies with tongueParts
+        if (!isQueryEmpty(context, allTongueTools)) {
+            // Must perform boolean on each individual tonguePart to avoid joining the tongue parts themselves to each other.
+            var tongueParts = evaluateQuery(context, definition.tongueParts);
+            for (var i = 0; i < size(tongueParts); i += 1)
+            {
+                opBoolean(context, id + ("booleanAdd" ~ i), {
+                    "tools" : qUnion([tongueParts[i], allTongueTools]),
+                    "operationType" : BooleanOperationType.UNION
+                });
+            }
         }
     });
     
