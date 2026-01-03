@@ -110,7 +110,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
     });
     
 /**
- * createTongueBody creates a tongue body by sweeping a line and thickening it.
+ * createTongueBody creates a tongue body by extruding a path line and thickening it.
  * Returns a Query containing the new body.
  * @param pathLine : Line/edge to serve as the path for the tongue
  * @param tongueParts : Bodies that will have tongues added
@@ -123,8 +123,8 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
 */
 function createTongueBody(context is Context, id is Id, pathLine is Query, tongueParts is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
 {
-    // To determine the plane to use for extruding the tongue, find the face of all tongueParts
-    // closest to the pathLine.
+    // To determine the plane to use for extruding the tongue, take the faces of
+    // all tongue parts and find the one closest to the first vertex of the pathLine.
     var linePoints = qAdjacent(pathLine, AdjacencyType.VERTEX, EntityType.VERTEX);
     var linePointsArray = evaluateQuery(context, linePoints);
     var vertexPoint = evVertexPoint(context, { "vertex" : linePointsArray[0] });    
