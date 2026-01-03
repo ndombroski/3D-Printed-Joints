@@ -20,9 +20,6 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         annotation { "Name" : "Length clearance", "Description" : "Length to subtract from the tongue to make it shorter than the groove depth" }
         isLength(definition.lengthClearance, { (millimeter) : [0, 0, 1e5] } as LengthBoundSpec);
         
-        annotation { "Name" : "Face", "Filter" : EntityType.FACE, "MaxNumberOfPicks" : 1, "Description" : "Face to create the tongue normal to. The tongue will protrude outward from the body of the selected face" }
-        definition.face is Query;
-        
         annotation { "Name" : "Tongue parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have tongues added to them" }
         definition.tongueParts is Query;
         
@@ -66,7 +63,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         for (var i = 0; i < size(lines); i += 1)
         {
             // Create tongue with clearance for adding to tongueParts
-            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, {
+            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.tongueParts, tongueThicknessWithClearance, tongueLengthWithClearance, {
                 "applyChamfer" : definition.chamfer,
                 "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
                 "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
@@ -74,7 +71,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
             tongueTools = append(tongueTools, tongueBody);
             
             // Create full-size tongue for cutting grooves
-            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, {
+            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.tongueParts, definition.tongueThickness, definition.tongueLength, {
                 "applyChamfer" : definition.chamfer,
                 "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
                 "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
@@ -116,7 +113,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
  * createTongueBody creates a tongue body by sweeping a line and thickening it.
  * Returns a Query containing the new body.
  * @param pathLine : Line/edge to serve as the path for the tongue
- * @param face : Face to create the tongue normal to
+ * @param tongueParts : Bodies that will have tongues added
  * @param tongueThickness : Thickness of the tongue
  * @param tongueLength : Length (extrusion/protrusion depth) of the tongue
  * @param options : Map containing optional settings:
@@ -124,8 +121,23 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
  *        - chamferDistance : Distance for the chamfer
  *        - chamferAngle : Angle for the chamfer
 */
-function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
+function createTongueBody(context is Context, id is Id, pathLine is Query, tongueParts is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
 {
+    // To determine the plane to use for extruding the tongue, find the face of all tongueParts
+    // closest to the pathLine.
+    var linePoints = qAdjacent(pathLine, AdjacencyType.VERTEX, EntityType.VERTEX);
+    var linePointsArray = evaluateQuery(context, linePoints);
+    var vertexPoint = evVertexPoint(context, { "vertex" : linePointsArray[0] });    
+    var closestTongueFaces = qClosestTo(qOwnedByBody(tongueParts, EntityType.FACE), vertexPoint);
+    
+    if (isQueryEmpty(context, closestTongueFaces))
+    {
+        throw regenError("No tongue part found near the selected edge.");
+    }
+
+    var closestTongueFacesArray = evaluateQuery(context, closestTongueFaces);
+    var face = closestTongueFacesArray[0];
+    
     // Get the tangent plane from the face to determine the extrusion direction
     var facePlane = evFaceTangentPlane(context, {
             "face" : face,
