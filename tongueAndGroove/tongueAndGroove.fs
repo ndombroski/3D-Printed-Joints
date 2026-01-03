@@ -29,15 +29,6 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         annotation { "Name" : "Groove parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have grooves subtracted from them" }
         definition.grooveParts is Query;
         
-        annotation { "Name" : "Add draft angle to tongue", "Description": "Add slight inward angle along the length of the tongue" }
-        definition.addDraftAngle is boolean;
-        
-        if (definition.addDraftAngle)
-        {
-            annotation { "Name" : "Draft angle" }
-            isAngle(definition.draftAngle, { (degree) : [0, 10, 90] } as AngleBoundSpec);
-        }
-        
         annotation { "Name" : "Add chamfer to tongue", "Description": "Add chamfer to the edges of the tongue that are inserted into the groove" }
         definition.chamfer is boolean;
         
@@ -75,11 +66,11 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         for (var i = 0; i < size(lines); i += 1)
         {
             // Create tongue with clearance for adding to tongueParts
-            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
             tongueTools = append(tongueTools, tongueBody);
             
             // Create full-size tongue for cutting grooves
-            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
             grooveTools = append(grooveTools, grooveTool);
         }
         
@@ -120,13 +111,11 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
  * @param face : Face to create the tongue normal to
  * @param tongueThickness : Thickness of the tongue
  * @param tongueLength : Length (extrusion/protrusion depth) of the tongue
- * @param applyDraftAngle : Whether to apply a draft angle
- * @param draftAngle : Angle for the draft
  * @param applyChamfer : Whether to chamfer the bottom edges
  * @param chamferDistance : Distance for the chamfer
  * @param chamferAngle : Angle for the chamfer
 */
-function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, applyDraftAngle is boolean, draftAngle is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
+function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
 {
     // Get the tangent plane from the face to determine the extrusion direction
     var facePlane = evFaceTangentPlane(context, {
@@ -160,12 +149,7 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
     // Get the thickened body
     var thickenedBody = qCreatedBy(thickenId, EntityType.BODY);
     
-    // Apply draft angle if requested
-    if (applyDraftAngle)
-    {
-        applyChamferToTongueTip(context, id + "draftChamfer", thickenedBody, endCapEdges, tongueLength, draftAngle);
-    }
-    
+
     // Apply chamfer to bottom edges if requested
     if (applyChamfer)
     {
