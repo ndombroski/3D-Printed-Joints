@@ -146,6 +146,9 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
     // Get the created sheet body
     var sheetBody = qCreatedBy(extrudeId, EntityType.BODY);
     
+    // Get the end cap edges of the sheet before thickening (these will help us find the tip faces later)
+    var endCapEdges = qCapEntity(extrudeId, CapType.END, EntityType.EDGE);
+    
     // Thicken the sheet body sheet body as midpoint
     var thickenId = id + "thicken";
     opThicken(context, thickenId, {
@@ -154,16 +157,19 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
             "thickness2" : tongueThickness / 2
     });
     
+    // Get the thickened body
+    var thickenedBody = qCreatedBy(thickenId, EntityType.BODY);
+    
     // Apply draft angle if requested
     if (applyDraftAngle)
     {
-        applyChamferToEndCap(context, id + "draftChamfer", thickenId, tongueLength, draftAngle);
+        applyOperationToTongueTip(context, id + "draftChamfer", thickenedBody, endCapEdges, tongueLength, draftAngle);
     }
     
     // Apply chamfer to bottom edges if requested
     if (applyChamfer)
     {
-        applyChamferToEndCap(context, id + "chamfer", thickenId, chamferDistance, chamferAngle);
+        applyOperationToTongueTip(context, id + "chamfer", thickenedBody, endCapEdges, chamferDistance, chamferAngle);
     }
     
     // Cleanup the sheet body
@@ -175,29 +181,52 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
     return qCreatedBy(thickenId, EntityType.BODY);
 }
 
+// This is most of the way there, but we're chamfering an edge adjacent to the tonguePart, which we do not want.
 /**
- * applyChamferToEndCap applies a chamfer to the edges of the end cap face of an extrusion.
+ * applyOperationToTongueTip applies a chamfer to the edges at the tip of a tongue body.
  * @param context : The context
  * @param id : Unique ID for the chamfer operation
- * @param extrudeId : ID of the extrude operation
+ * @param tongueBody : The thickened tongue body
+ * @param endCapEdges : Edges from the end cap of the original sheet extrusion
  * @param distance : Distance for the chamfer
  * @param angle : Angle for the chamfer
 */
-function applyChamferToEndCap(context is Context, id is Id, extrudeId is Id, distance is ValueWithUnits, angle is ValueWithUnits)
+function applyOperationToTongueTip(context is Context, id is Id, tongueBody is Query, endCapEdges is Query, distance is ValueWithUnits, angle is ValueWithUnits)
 {
-    // Get the end cap face of the extrusion (opposite to the sketch plane)
-    var endCapFace = qCapEntity(extrudeId, CapType.EITHER, EntityType.FACE);
+    // Get vertices from the end cap edges
+    var endCapVertices = qAdjacent(endCapEdges, AdjacencyType.VERTEX, EntityType.VERTEX);
+    var endCapVertexArray = evaluateQuery(context, endCapVertices);
     
-    var endCapFaceResolved = evaluateQuery(context, endCapFace);
-    println("endCapFaceResolved");
-    println(endCapFaceResolved);
+    // Get all faces of the tongue body
+    var allTongueFaces = qOwnedByBody(tongueBody, EntityType.FACE);
     
-    // Get the edges of the end cap face
-    var bottomEdges = qAdjacent(endCapFace, AdjacencyType.EDGE, EntityType.EDGE);
-
-    // Apply the chamfer
+    // Find faces that contain any of the end cap vertex points
+    var tipFacesList = [];
+    for (var vertex in endCapVertexArray)
+    {
+        var vertexPoint = evVertexPoint(context, { "vertex" : vertex });
+        var facesContainingPoint = qContainsPoint(allTongueFaces, vertexPoint);
+        var facesArray = evaluateQuery(context, facesContainingPoint);
+        for (var face in facesArray)
+        {
+            tipFacesList = append(tipFacesList, face);
+        }
+    }
+    
+    var tipFaces = qUnion(tipFacesList);
+    
+    // Debug: Highlight the tip faces in blue
+    debug(context, tipFaces, DebugColor.BLUE);
+    
+    // Get the edges of the tip faces
+    var tipEdges = qAdjacent(tipFaces, AdjacencyType.EDGE, EntityType.EDGE);
+    
+    // Debug: Highlight the tip edges in red
+    debug(context, tipEdges, DebugColor.RED);
+    
+    // Apply the chamfer to these edges
     opChamfer(context, id, {
-            "entities" : bottomEdges,
+            "entities" : tipEdges,
             "chamferType" : ChamferType.OFFSET_ANGLE,
             "width" : distance,
             "angle" : angle
