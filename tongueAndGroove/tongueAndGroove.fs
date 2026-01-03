@@ -66,11 +66,19 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         for (var i = 0; i < size(lines); i += 1)
         {
             // Create tongue with clearance for adding to tongueParts
-            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, {
+                "applyChamfer" : definition.chamfer,
+                "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
+                "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
+            });
             tongueTools = append(tongueTools, tongueBody);
             
             // Create full-size tongue for cutting grooves
-            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, {
+                "applyChamfer" : definition.chamfer,
+                "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
+                "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
+            });
             grooveTools = append(grooveTools, grooveTool);
         }
         
@@ -111,11 +119,12 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
  * @param face : Face to create the tongue normal to
  * @param tongueThickness : Thickness of the tongue
  * @param tongueLength : Length (extrusion/protrusion depth) of the tongue
- * @param applyChamfer : Whether to chamfer the bottom edges
- * @param chamferDistance : Distance for the chamfer
- * @param chamferAngle : Angle for the chamfer
+ * @param options : Map containing optional settings:
+ *        - applyChamfer : Whether to chamfer the bottom edges
+ *        - chamferDistance : Distance for the chamfer
+ *        - chamferAngle : Angle for the chamfer
 */
-function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
+function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
 {
     // Get the tangent plane from the face to determine the extrusion direction
     var facePlane = evFaceTangentPlane(context, {
@@ -151,9 +160,9 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, face 
     
 
     // Apply chamfer to bottom edges if requested
-    if (applyChamfer)
+    if (options.applyChamfer)
     {
-        applyChamferToTongueTip(context, id + "chamfer", thickenedBody, endCapEdges, chamferDistance, chamferAngle);
+        applyChamferToTongueTip(context, id + "chamfer", thickenedBody, endCapEdges, options.chamferDistance, options.chamferAngle);
     }
     
     // Cleanup the sheet body
