@@ -1,5 +1,6 @@
 FeatureScript 2837;
 import(path : "onshape/std/common.fs", version : "2837.0");
+Common::import(path : "91b3d7b1a713c22628315529", version : "7d3303174d0f08b441e2fc90");
 
 annotation { "Feature Type Name": "Tongue and Groove" }
 export const tongueAndGroove = defineFeature(function(context is Context, id is Id, definition is map)
@@ -19,9 +20,6 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         
         annotation { "Name" : "Length clearance", "Description" : "Length to subtract from the tongue to make it shorter than the groove depth" }
         isLength(definition.lengthClearance, { (millimeter) : [0, 0, 1e5] } as LengthBoundSpec);
-        
-        annotation { "Name" : "Face", "Filter" : EntityType.FACE, "MaxNumberOfPicks" : 1, "Description" : "Face to create the tongue normal to. The tongue will protrude outward from the body of the selected face" }
-        definition.face is Query;
         
         annotation { "Name" : "Tongue parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have tongues added to them" }
         definition.tongueParts is Query;
@@ -66,7 +64,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
         for (var i = 0; i < size(lines); i += 1)
         {
             // Create tongue with clearance for adding to tongueParts
-            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.face, tongueThicknessWithClearance, tongueLengthWithClearance, {
+            var tongueBody = createTongueBody(context, id + ("tongue" ~ i), lines[i], definition.tongueParts, tongueThicknessWithClearance, tongueLengthWithClearance, {
                 "applyChamfer" : definition.chamfer,
                 "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
                 "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
@@ -74,7 +72,7 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
             tongueTools = append(tongueTools, tongueBody);
             
             // Create full-size tongue for cutting grooves
-            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.face, definition.tongueThickness, definition.tongueLength, {
+            var grooveTool = createTongueBody(context, id + ("groove" ~ i), lines[i], definition.tongueParts, definition.tongueThickness, definition.tongueLength, {
                 "applyChamfer" : definition.chamfer,
                 "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
                 "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
@@ -113,10 +111,10 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
     });
     
 /**
- * createTongueBody creates a tongue body by sweeping a line and thickening it.
+ * createTongueBody creates a tongue body by extruding a path line and thickening it.
  * Returns a Query containing the new body.
  * @param pathLine : Line/edge to serve as the path for the tongue
- * @param face : Face to create the tongue normal to
+ * @param tongueParts : Bodies that will have tongues added
  * @param tongueThickness : Thickness of the tongue
  * @param tongueLength : Length (extrusion/protrusion depth) of the tongue
  * @param options : Map containing optional settings:
@@ -124,13 +122,10 @@ export const tongueAndGroove = defineFeature(function(context is Context, id is 
  *        - chamferDistance : Distance for the chamfer
  *        - chamferAngle : Angle for the chamfer
 */
-function createTongueBody(context is Context, id is Id, pathLine is Query, face is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
+function createTongueBody(context is Context, id is Id, pathLine is Query, tongueParts is Query, tongueThickness is ValueWithUnits, tongueLength is ValueWithUnits, options is map) returns Query
 {
-    // Get the tangent plane from the face to determine the extrusion direction
-    var facePlane = evFaceTangentPlane(context, {
-            "face" : face,
-            "parameter" : vector(0.5, 0.5)
-    });
+    // Get the tangent plane from a face of the tongue parts to determine the extrusion direction
+    var facePlane = Common::getFacePlaneForEdge(context, pathLine, tongueParts);
     
     // Extrude the line into a sheet body along the face normal
     var extrudeId = id + "extrude";

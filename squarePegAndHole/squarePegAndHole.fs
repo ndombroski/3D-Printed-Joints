@@ -1,5 +1,6 @@
 FeatureScript 2837;
 import(path : "onshape/std/common.fs", version : "2837.0");
+Common::import(path : "91b3d7b1a713c22628315529", version : "7d3303174d0f08b441e2fc90");
 
 annotation { "Feature Type Name": "Square Peg and Hole" }
 export const pegAndHole = defineFeature(function(context is Context, id is Id, definition is map)
@@ -26,9 +27,6 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
         annotation { "Name" : "Rotation Angle", "Description" : "Rotation of the square pegs around the center point." }
         isAngle(definition.rotationAngle, { (degree) : [-360, 45, 360] } as AngleBoundSpec);
         
-        annotation { "Name" : "Face", "Filter" : EntityType.FACE, "MaxNumberOfPicks" : 1, "Description" : "Face to create the pegs normal to" }
-        definition.face is Query;
-        
         annotation { "Name" : "Peg parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have pegs added to them" }
         definition.pegParts is Query;
         
@@ -40,6 +38,7 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
         
         if (definition.addDraftAngle)
         {
+            // todo: remove this option. It makes the implementation more complicated and it can still be achieved with the chamfer option.
             annotation { "Name" : "Draft angle" }
             isAngle(definition.draftAngle, { (degree) : [0, 10, 90] } as AngleBoundSpec);
         }
@@ -82,11 +81,11 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
         for (var i = 0; i < size(points); i += 1)
         {
             // Create peg with clearance for adding to pegParts
-            var pegBody = createPegBody(context, id + ("peg" ~ i), points[i], definition.face, pegWidthWithClearance, pegHeightWithClearance, pegLengthWithClearance, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var pegBody = createPegBody(context, id + ("peg" ~ i), points[i], definition.pegParts, pegWidthWithClearance, pegHeightWithClearance, pegLengthWithClearance, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
             pegTools = append(pegTools, pegBody);
             
             // Create full-size peg for cutting holes
-            var holeTool = createPegBody(context, id + ("hole" ~ i), points[i], definition.face, definition.pegWidth, definition.pegHeight, definition.pegLength, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var holeTool = createPegBody(context, id + ("hole" ~ i), points[i], definition.pegParts, definition.pegWidth, definition.pegHeight, definition.pegLength, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
             holeTools = append(holeTools, holeTool);
         }
         
@@ -124,7 +123,7 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
  * createPegBody creates a single peg body at a specific point.
  * Returns a Query containing the new body.
  * @param point : Point to serve as midpoint of the peg
- * @param face : Face to create the peg normal to
+ * @param bodies : Bodies to determine which face to create the peg normal to
  * @param pegWidth : Width of the rectangular peg
  * @param pegHeight : Height of the rectangular peg
  * @param pegLength : Length (extrusion depth) of the peg
@@ -135,18 +134,15 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
  * @param chamferDistance : Distance for the chamfer
  * @param chamferAngle : Angle for the chamfer
 */
-function createPegBody(context is Context, id is Id, point is Query, face is Query, pegWidth is ValueWithUnits, pegHeight is ValueWithUnits, pegLength is ValueWithUnits, rotationAngle is ValueWithUnits, applyDraftAngle is boolean, draftAngle is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
+function createPegBody(context is Context, id is Id, point is Query, bodies is Query, pegWidth is ValueWithUnits, pegHeight is ValueWithUnits, pegLength is ValueWithUnits, rotationAngle is ValueWithUnits, applyDraftAngle is boolean, draftAngle is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
 {
     // Get the 3D coordinates of the selected point
     var worldPoint = evVertexPoint(context, {
             "vertex" : point
     });
 
-    // Create plane normal to the selected face
-    var sketchPlane = evFaceTangentPlane(context, {
-            "face" : face,
-            "parameter" : vector(pegWidth, pegWidth) 
-    });
+    // Get plane normal to the closest face from the bodies
+    var sketchPlane = Common::getFacePlaneForPoint(context, point, bodies);
         
     // Adjust the plane origin to be at our selected point
     sketchPlane.origin = worldPoint;
