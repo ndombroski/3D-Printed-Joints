@@ -33,16 +33,6 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
         annotation { "Name" : "Hole parts", "Filter" : EntityType.BODY, "Description" : "Part(s) that will have holes subtracted from them" }
         definition.holeParts is Query;
         
-        annotation { "Name" : "Add draft angle to peg" }
-        definition.addDraftAngle is boolean;
-        
-        if (definition.addDraftAngle)
-        {
-            // todo: remove this option. It makes the implementation more complicated and it can still be achieved with the chamfer option.
-            annotation { "Name" : "Draft angle" }
-            isAngle(definition.draftAngle, { (degree) : [0, 10, 90] } as AngleBoundSpec);
-        }
-        
         annotation { "Name" : "Add chamfer to peg" }
         definition.chamfer is boolean;
         
@@ -81,11 +71,19 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
         for (var i = 0; i < size(points); i += 1)
         {
             // Create peg with clearance for adding to pegParts
-            var pegBody = createPegBody(context, id + ("peg" ~ i), points[i], definition.pegParts, pegWidthWithClearance, pegHeightWithClearance, pegLengthWithClearance, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var pegBody = createPegBody(context, id + ("peg" ~ i), points[i], definition.pegParts, pegWidthWithClearance, pegHeightWithClearance, pegLengthWithClearance, definition.rotationAngle, {
+                "applyChamfer" : definition.chamfer,
+                "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
+                "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
+            });
             pegTools = append(pegTools, pegBody);
             
             // Create full-size peg for cutting holes
-            var holeTool = createPegBody(context, id + ("hole" ~ i), points[i], definition.pegParts, definition.pegWidth, definition.pegHeight, definition.pegLength, definition.rotationAngle, definition.addDraftAngle, definition.addDraftAngle ? definition.draftAngle : 0 * degree, definition.chamfer, definition.chamfer ? definition.chamferDistance : 0 * millimeter, definition.chamfer ? definition.chamferAngle : 0 * degree);
+            var holeTool = createPegBody(context, id + ("hole" ~ i), points[i], definition.pegParts, definition.pegWidth, definition.pegHeight, definition.pegLength, definition.rotationAngle, {
+                "applyChamfer" : definition.chamfer,
+                "chamferDistance" : definition.chamfer ? definition.chamferDistance : 0 * millimeter,
+                "chamferAngle" : definition.chamfer ? definition.chamferAngle : 0 * degree
+            });
             holeTools = append(holeTools, holeTool);
         }
         
@@ -128,13 +126,12 @@ export const pegAndHole = defineFeature(function(context is Context, id is Id, d
  * @param pegHeight : Height of the rectangular peg
  * @param pegLength : Length (extrusion depth) of the peg
  * @param rotationAngle : Rotation angle of the peg around the center point
- * @param applyDraftAngle : Whether to apply a draft angle
- * @param draftAngle : Angle for the draft
- * @param applyChamfer : Whether to chamfer the bottom edges
- * @param chamferDistance : Distance for the chamfer
- * @param chamferAngle : Angle for the chamfer
+ * @param options : Map containing optional settings:
+ *        - applyChamfer : Whether to chamfer the bottom edges
+ *        - chamferDistance : Distance for the chamfer
+ *        - chamferAngle : Angle for the chamfer
 */
-function createPegBody(context is Context, id is Id, point is Query, bodies is Query, pegWidth is ValueWithUnits, pegHeight is ValueWithUnits, pegLength is ValueWithUnits, rotationAngle is ValueWithUnits, applyDraftAngle is boolean, draftAngle is ValueWithUnits, applyChamfer is boolean, chamferDistance is ValueWithUnits, chamferAngle is ValueWithUnits) returns Query
+function createPegBody(context is Context, id is Id, point is Query, bodies is Query, pegWidth is ValueWithUnits, pegHeight is ValueWithUnits, pegLength is ValueWithUnits, rotationAngle is ValueWithUnits, options is map) returns Query
 {
     // Get the 3D coordinates of the selected point
     var worldPoint = evVertexPoint(context, {
@@ -175,16 +172,10 @@ function createPegBody(context is Context, id is Id, point is Query, bodies is Q
             "endDepth" : pegLength
     });
     
-    // Apply draft angle if requested
-    if (applyDraftAngle)
-    {
-        applyChamferToEndCap(context, id + "draftChamfer", extrudeId, pegLength, draftAngle);
-    }
-    
     // Apply chamfer to bottom edges if requested
-    if (applyChamfer)
+    if (options.applyChamfer)
     {
-        applyChamferToEndCap(context, id + "chamfer", extrudeId, chamferDistance, chamferAngle);
+        applyChamferToEndCap(context, id + "chamfer", extrudeId, options.chamferDistance, options.chamferAngle);
     }
     
     // Cleanup the sketch
