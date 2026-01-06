@@ -191,27 +191,28 @@ function createTongueBody(context is Context, id is Id, pathLine is Query, tongu
  * creating clearance for the length of the tongue.
  * @param context : The context
  * @param id : Unique ID for operations
- * @param thickenedBody : The thickened tongue body
+ * @param tongueBodyFacesArray : The solid tongue body
  * @param nonCapEdges : Edges from the original sheet body that are not end caps
  * @param extrudeDirection : Normal direction of the original extrusion
  * @param clearance : Amount of clearance to add to the length
 */
-function addClearanceToLengthOfTongue(context is Context, id is Id, thickenedBody is Query, nonCapEdges is Query, extrudeDirection is Vector, clearance is ValueWithUnits)
+function addClearanceToLengthOfTongue(context is Context, id is Id, tongueBody is Query, nonCapEdges is Query, extrudeDirection is Vector, clearance is ValueWithUnits)
 {
-    // Find faces of thickened body that coincide with nonCapEdges
+    // Find faces of tongue body that coincide with nonCapEdges. Those are the faces we need to move inward.
     var nonCapEdgesArray = evaluateQuery(context, nonCapEdges);
-    var thickenedBodyFaces = qOwnedByBody(thickenedBody, EntityType.FACE);
-    var thickenedBodyFacesArray = evaluateQuery(context, thickenedBodyFaces);
+    var tongueBodyFaces = qOwnedByBody(tongueBody, EntityType.FACE);
+    var tongueBodyFacesArray = evaluateQuery(context, tongueBodyFaces);
     
     var matchingFacesList = [];
-    for (var i = 0; i < size(thickenedBodyFacesArray); i += 1)
+    for (var i = 0; i < size(tongueBodyFacesArray); i += 1)
     {
-        var face = thickenedBodyFacesArray[i];
+        var face = tongueBodyFacesArray[i];
         var matchesAnyEdge = false;
         
         // Check if this face contains all vertices from any single edge
         for (var edge in nonCapEdgesArray)
         {
+            // todo nickyd: simplify with common function.
             var edgeVertices = qAdjacent(edge, AdjacencyType.VERTEX, EntityType.VERTEX);
             var edgeVertexArray = evaluateQuery(context, edgeVertices);
             var containsAllVerticesOfEdge = true;
@@ -241,7 +242,39 @@ function addClearanceToLengthOfTongue(context is Context, id is Id, thickenedBod
     }
     var facesFromNonCapEdges = qUnion(matchingFacesList);
     
-    debug(context, facesFromNonCapEdges, debug.RED)
+    // Extrude each face inward (opposite to its normal) to remove material
+    if (!isQueryEmpty(context, facesFromNonCapEdges))
+    {
+        var facesArray = evaluateQuery(context, facesFromNonCapEdges);
+        var extrudedBodies = [];
+        for (var i = 0; i < size(facesArray); i += 1)
+        {
+            var face = facesArray[i];
+            var faceNormal = evFaceTangentPlane(context, {
+                    "face" : face,
+                    "parameter" : vector(0.5, 0.5)
+            }).normal;
+            
+            var extrudeOpId = id + ("face" ~ i);
+            opExtrude(context, extrudeOpId, {
+                    "entities" : face,
+                    "direction" : -faceNormal,
+                    "endBound" : BoundingType.BLIND,
+                    "endDepth" : clearance
+            });
+            
+            // Collect the extruded body
+            var extrudedBody = qCreatedBy(extrudeOpId, EntityType.BODY);
+            extrudedBodies = append(extrudedBodies, extrudedBody);
+        }
+        
+        opBoolean(context, id + "subtract", {
+                "tools" : qUnion(extrudedBodies),
+                "targets" : tongueBody,
+                "operationType" : BooleanOperationType.SUBTRACTION,
+                "keepTools" : false
+        });
+    }
 }
 
 /**
