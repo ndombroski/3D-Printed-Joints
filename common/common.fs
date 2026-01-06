@@ -69,3 +69,43 @@ export function getFacePlaneForPoint(context is Context, point is Query, bodies 
             "parameter" : vector(0.5, 0.5)
     });
 }
+
+/**
+ * Find the face of a solid body that contains all vertices of a given edge.
+ * Returns the face if found, otherwise returns an empty query.
+ * @param context : The context
+ * @param edge : The edge whose vertices should be contained by the face
+ * @param body : The solid body to search for faces
+ * @return Query : The face that contains all vertices of the edge, or empty query if none found
+*/
+export function faceThatContainsEntireEdge(context is Context, edge is Query, body is Query) returns Query
+{
+    var edgeVertices = qAdjacent(edge, AdjacencyType.VERTEX, EntityType.VERTEX);
+    var edgeVertexArray = evaluateQuery(context, edgeVertices);
+    var bodyFaces = qOwnedByBody(body, EntityType.FACE);
+    var bodyFacesArray = evaluateQuery(context, bodyFaces);
+    
+    for (var face in bodyFacesArray)
+    {
+        var containsAllVerticesOfEdge = true;
+        
+        for (var vertex in edgeVertexArray)
+        {
+            var vertexPoint = evVertexPoint(context, { "vertex" : vertex });
+            var facesContainingPoint = qContainsPoint(face, vertexPoint);
+            if (isQueryEmpty(context, facesContainingPoint))
+            {
+                containsAllVerticesOfEdge = false;
+                break;
+            }
+        }
+        
+        if (containsAllVerticesOfEdge)
+        {
+            return face;
+        }
+    }
+    
+    // No face found that contains all vertices of the edge
+    return qNothing();
+}

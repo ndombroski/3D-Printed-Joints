@@ -200,46 +200,17 @@ function addClearanceToLengthOfTongue(context is Context, id is Id, tongueBody i
 {
     // Find faces of tongue body that coincide with nonCapEdges. Those are the faces we need to move inward.
     var nonCapEdgesArray = evaluateQuery(context, nonCapEdges);
-    var tongueBodyFaces = qOwnedByBody(tongueBody, EntityType.FACE);
-    var tongueBodyFacesArray = evaluateQuery(context, tongueBodyFaces);
-    
     var matchingFacesList = [];
-    for (var i = 0; i < size(tongueBodyFacesArray); i += 1)
+    
+    for (var edge in nonCapEdgesArray)
     {
-        var face = tongueBodyFacesArray[i];
-        var matchesAnyEdge = false;
-        
-        // Check if this face contains all vertices from any single edge
-        for (var edge in nonCapEdgesArray)
+        var matchingFace = Common::faceThatContainsEntireEdge(context, edge, tongueBody);
+        if (!isQueryEmpty(context, matchingFace))
         {
-            // todo nickyd: simplify with common function.
-            var edgeVertices = qAdjacent(edge, AdjacencyType.VERTEX, EntityType.VERTEX);
-            var edgeVertexArray = evaluateQuery(context, edgeVertices);
-            var containsAllVerticesOfEdge = true;
-            
-            for (var vertex in edgeVertexArray)
-            {
-                var vertexPoint = evVertexPoint(context, { "vertex" : vertex });
-                var facesContainingPoint = qContainsPoint(face, vertexPoint);
-                if (isQueryEmpty(context, facesContainingPoint))
-                {
-                    containsAllVerticesOfEdge = false;
-                    break;
-                }
-            }
-            
-            if (containsAllVerticesOfEdge)
-            {
-                matchesAnyEdge = true;
-                break;
-            }
-        }
-        
-        if (matchesAnyEdge)
-        {
-            matchingFacesList = append(matchingFacesList, face);
+            matchingFacesList = append(matchingFacesList, matchingFace);
         }
     }
+    
     var facesFromNonCapEdges = qUnion(matchingFacesList);
     
     // Extrude each face inward (opposite to its normal) to remove material
